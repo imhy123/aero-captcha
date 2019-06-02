@@ -1,5 +1,7 @@
 ## Development Environment
 
+Advanced noCaptcha & invisible Captcha, Login No Captcha reCAPTCHA (Google)
+
 ### Docker
 
 ```
