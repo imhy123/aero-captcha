@@ -38,6 +38,9 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
             add_action( 'admin_init', array( $this, 'register_settings' ) );
             //add_action( 'admin_notices', array( $this, 'admin_notices' ) );
+
+            add_action('login_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
+            add_action('admin_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
         }
 
         public function load_textdomain() {
@@ -78,6 +81,43 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
                 update_option('login_nocaptcha_error', sprintf(__('Login NoCaptcha has not been properly configured. <a href="%s">Click here</a> to configure.','login-recaptcha'), 'options-general.php?page=login-recaptcha/admin.php'));
             }
             */
+        }
+
+        public function register_scripts_css() {
+            $api_url = 'https://www.recaptcha.net/recaptcha/api.js';
+
+            wp_register_script('aero_captcha_google_api', $api_url, array(), null );
+            //wp_register_style('login_nocaptcha_css', plugin_dir_url( __FILE__ ) . 'css/style.css');
+        }
+    
+        public function enqueue_scripts_css() {
+            if(!wp_script_is('aero_captcha_google_api','registered')) {
+                $this->register_scripts_css();
+            }
+
+            if ( (!empty($GLOBALS['pagenow']) && ($GLOBALS['pagenow'] == 'options-general.php' || $GLOBALS['pagenow'] == 'wp-login.php')) || 
+                    (function_exists('is_account_page') && is_account_page()) ||
+                    (function_exists('is_checkout') && is_checkout())
+                ) {
+                wp_enqueue_script('aero_captcha_google_api');
+                //wp_enqueue_style('login_nocaptcha_css');
+            }
+        }
+
+        public function recaptcha_v3_field($action) {
+            $site_key = trim( get_option( 'aero_captcha_key' ) );
+            $google_url = 'https://www.recaptcha.net/recaptcha/api.js?render=' . $site_key;
+
+            ?>
+			<script src="<?php echo esc_url( $google_url ); ?>"></script>
+            <script>
+            grecaptcha.ready(function() {
+                grecaptcha.execute('<?php echo esc_js( $site_key ); ?>', {action: '<?php echo esc_js( $action ); ?>'}).then(function(token) {
+                });
+            });
+            </script>
+
+            <?php
         }
     }
 }
