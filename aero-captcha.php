@@ -9,9 +9,26 @@ Author URI: https://github.com/imhy123/AeroCaptcha
 License: GPLv2 or later
 */
 
-if ( !function_exists( 'add_action' ) ) {
+if ( !function_exists( 'add_action' ) || ! defined( 'ABSPATH' ) ) {
     die();
 }
+
+if ( !function_exists('write_log') ) {
+    function write_log( $log )  {
+        $log_content = $log;
+        if ( is_array( $log ) || is_object( $log ) ) {
+            $log_content = print_r( $log, true );
+        }
+
+        $log_content = $log_content . "\n";
+
+        $log_file = fopen(ABSPATH . '/ac_log.txt', 'a');
+        if ($log_file) {
+            fwrite( $log_file, $log_content );
+            fclose( $log_file );
+        }
+    }
+ }
 
 if ( ! class_exists( 'AeroCaptcha' ) ) {
     class AeroCaptcha {
@@ -127,6 +144,8 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             $secret_key = trim( get_option( 'aero_captcha_secret' ) );
 
             if ( ! $secret_key ) {
+                write_log( 'secret_key is empty, return verify success' );
+
                 return true;
             }
 
@@ -134,8 +153,12 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             $token = isset( $_POST['g-recaptcha-response'] ) ? $_POST['g-recaptcha-response'] : '';
 
             if ( ! $remoteip || ! $token ) {
+                write_log( 'remoteip or token is empty, return verify failed' );
+
                 return false;
             }
+
+            write_log( 'start verify, remoteip: ' . $remoteip );
 
             $url = 'https://www.recaptcha.net/recaptcha/api/siteverify';
 
@@ -154,6 +177,8 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             // get the request response body
             $response_body = wp_remote_retrieve_body( $request );
             if ( ! $response_body ) {
+                write_log( 'response_body is empty, return verify success' );
+
                 return true;
             }
 
@@ -161,7 +186,7 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             if ( isset( $result['success'] ) && true == $result['success'] ) {
                 $score = isset( $result['score'] ) ? $result['score'] : 0;
 
-                error_log( 'score: ' . $score );
+                write_log( 'verify finished, remoteip: ' . $remoteip . ', score: ' . $score );
                 
                 return $score > 0.5;
             } else {
