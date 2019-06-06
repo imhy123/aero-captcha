@@ -39,8 +39,14 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             add_action( 'admin_init', array( $this, 'register_settings' ) );
             //add_action( 'admin_notices', array( $this, 'admin_notices' ) );
 
-            add_action('login_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
-            add_action('admin_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
+            //add_action('login_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
+            //add_action('admin_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
+
+            if ( ! is_user_logged_in() ) {
+                add_action( 'comment_form_after_fields', array( $this, 'show_recaptcha_field_comment' ), 99 );
+            } else {
+                //add_filter( 'comment_form_field_comment', array( $this, 'comment_form_field' ), 99 );
+            }
         }
 
         public function load_textdomain() {
@@ -104,7 +110,25 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             }
         }
 
-        public function recaptcha_v3_field($action) {
+        public function show_recaptcha_field_comment() {
+            $this->show_recaptcha_field('comment');
+        }
+
+        public function show_recaptcha_field($action) {
+            echo $this->recaptcha_form_field();
+
+            $this->recaptcha_js_field($action);
+        }
+
+        public function recaptcha_form_field() {
+            $field = '<div class="aero_captcha_field">';
+			$field .= '<input type="hidden" name="g-recaptcha-response" value="" />';
+            $field .= '</div>';
+
+            return $field;
+        }
+
+        public function recaptcha_js_field($action) {
             $site_key = trim( get_option( 'aero_captcha_key' ) );
             $google_url = 'https://www.recaptcha.net/recaptcha/api.js?render=' . $site_key;
 
@@ -113,6 +137,16 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             <script>
             grecaptcha.ready(function() {
                 grecaptcha.execute('<?php echo esc_js( $site_key ); ?>', {action: '<?php echo esc_js( $action ); ?>'}).then(function(token) {
+                    console.log("getToken: " + token);
+
+                    for ( var i = 0; i < document.forms.length; i++ ) {
+                        var form = document.forms[i];
+                        var captcha = form.querySelector( 'input[name="g-recaptcha-response"]' );
+                        if ( null === captcha )
+                            continue;
+
+                        captcha.value = token;
+                    }
                 });
             });
             </script>
@@ -122,4 +156,5 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
     }
 }
 
-AeroCaptcha::init();
+//AeroCaptcha::init();
+add_action( 'init', array( 'AeroCaptcha', 'init' ) );
