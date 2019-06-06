@@ -37,15 +37,10 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
             add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
             add_action( 'admin_init', array( $this, 'register_settings' ) );
-            //add_action( 'admin_notices', array( $this, 'admin_notices' ) );
-
-            //add_action('login_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
-            //add_action('admin_enqueue_scripts', array( $this, 'enqueue_scripts_css' ) );
 
             if ( ! is_user_logged_in() ) {
                 add_action( 'comment_form_after_fields', array( $this, 'show_recaptcha_field_comment' ), 99 );
-            } else {
-                //add_filter( 'comment_form_field_comment', array( $this, 'comment_form_field' ), 99 );
+                add_filter( 'pre_comment_approved', array( $this, 'comment_verify' ), 99 );
             }
         }
 
@@ -70,44 +65,6 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             register_setting( 'aero_captcha', 'aero_captcha_secret', 'AeroCaptcha::filter_string' );
             register_setting( 'aero_captcha', 'aero_captcha_whitelist', 'AeroCaptcha::filter_whitelist' );
 
-            /* system values to determine if captcha is working and display useful error messages */
-            /*
-            delete_option('login_nocaptcha_working');
-
-            add_option('login_nocaptcha_error', 
-                sprintf(__('Login NoCaptcha has not been properly configured. <a href="%s">Click here</a> to configure.','login-recaptcha'), 'options-general.php?page=login-recaptcha/admin.php'));
-            add_option('login_nocaptcha_message_type', 'notice-error');
-            
-            if (LoginNocaptcha::valid_key_secret(get_option('login_nocaptcha_key')) &&
-            LoginNocaptcha::valid_key_secret(get_option('login_nocaptcha_secret')) ) {
-                update_option('login_nocaptcha_working', true);
-            } else {
-                delete_option('login_nocaptcha_working');
-                update_option('login_nocaptcha_message_type', 'notice-error');
-                update_option('login_nocaptcha_error', sprintf(__('Login NoCaptcha has not been properly configured. <a href="%s">Click here</a> to configure.','login-recaptcha'), 'options-general.php?page=login-recaptcha/admin.php'));
-            }
-            */
-        }
-
-        public function register_scripts_css() {
-            $api_url = 'https://www.recaptcha.net/recaptcha/api.js';
-
-            wp_register_script('aero_captcha_google_api', $api_url, array(), null );
-            //wp_register_style('login_nocaptcha_css', plugin_dir_url( __FILE__ ) . 'css/style.css');
-        }
-    
-        public function enqueue_scripts_css() {
-            if(!wp_script_is('aero_captcha_google_api','registered')) {
-                $this->register_scripts_css();
-            }
-
-            if ( (!empty($GLOBALS['pagenow']) && ($GLOBALS['pagenow'] == 'options-general.php' || $GLOBALS['pagenow'] == 'wp-login.php')) || 
-                    (function_exists('is_account_page') && is_account_page()) ||
-                    (function_exists('is_checkout') && is_checkout())
-                ) {
-                wp_enqueue_script('aero_captcha_google_api');
-                //wp_enqueue_style('login_nocaptcha_css');
-            }
         }
 
         public function show_recaptcha_field_comment() {
@@ -153,8 +110,65 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
 
             <?php
         }
+
+        function comment_verify( $approved ) {
+			if ( ! $this->verify() ) {
+				return new WP_Error( 'aero-captcha error', 'verify failed', 403 );
+            }
+            
+			return $approved;
+        }
+        
+        function verify() {
+			if ( is_user_logged_in() ) {
+				return true;
+			}
+
+            $secret_key = trim( get_option( 'aero_captcha_secret' ) );
+
+            if ( ! $secret_key ) {
+                return true;
+            }
+
+            $remoteip = $_SERVER['REMOTE_ADDR'];
+            $token = isset( $_POST['g-recaptcha-response'] ) ? $_POST['g-recaptcha-response'] : '';
+
+            if ( ! $remoteip || ! $token ) {
+                return false;
+            }
+
+            $url = 'https://www.recaptcha.net/recaptcha/api/siteverify';
+
+            // make a POST request to the Google reCAPTCHA Server
+            $request = wp_remote_post(
+                $url, array(
+                    'timeout' => 10,
+                    'body'    => array(
+                        'secret'   => $secret_key,
+                        'response' => $token,
+                        'remoteip' => $remoteip,
+                    ),
+                )
+            );
+
+            // get the request response body
+            $response_body = wp_remote_retrieve_body( $request );
+            if ( ! $response_body ) {
+                return true;
+            }
+
+            $result = json_decode( $response_body, true );
+            if ( isset( $result['success'] ) && true == $result['success'] ) {
+                $score = isset( $result['score'] ) ? $result['score'] : 0;
+
+                error_log( 'score: ' . $score );
+                
+                return $score > 0.5;
+            } else {
+                return false;
+            }
+		}
     }
 }
 
-//AeroCaptcha::init();
 add_action( 'init', array( 'AeroCaptcha', 'init' ) );
