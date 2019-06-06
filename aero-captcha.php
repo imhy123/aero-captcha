@@ -30,6 +30,15 @@ if ( !function_exists('write_log') ) {
     }
  }
 
+ function disable_ssl_verify( $handle, $request_args, $request_url ) {
+    if ( false === strpos( $request_url, 'www.recaptcha.net' ) ) {
+        return;
+    }
+    
+    curl_setopt( $handle, CURLOPT_SSL_VERIFYHOST, false );
+    curl_setopt( $handle, CURLOPT_SSL_VERIFYPEER, false );
+}
+
 if ( ! class_exists( 'AeroCaptcha' ) ) {
     class AeroCaptcha {
 
@@ -54,6 +63,7 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
             add_action( 'admin_menu', array( $this, 'register_menu_page' ) );
             add_action( 'admin_init', array( $this, 'register_settings' ) );
+            add_action( 'http_api_curl', 'disable_ssl_verify', 10, 3 );
 
             if ( ! is_user_logged_in() ) {
                 add_action( 'comment_form_after_fields', array( $this, 'show_recaptcha_field_comment' ), 99 );
@@ -163,7 +173,7 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             $url = 'https://www.recaptcha.net/recaptcha/api/siteverify';
 
             // make a POST request to the Google reCAPTCHA Server
-            $request = wp_remote_post(
+            $response = wp_remote_post(
                 $url, array(
                     'timeout' => 10,
                     'body'    => array(
@@ -175,7 +185,14 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             );
 
             // get the request response body
-            $response_body = wp_remote_retrieve_body( $request );
+            if ( is_wp_error( $response ) ) {
+                $error_message = $response->get_error_message();
+                write_log( 'post failed: ' . $error_message .  ', will return verify success' );
+
+                return true;
+            }
+
+            $response_body = wp_remote_retrieve_body( $response );
             if ( ! $response_body ) {
                 write_log( 'response_body is empty, return verify success' );
 
@@ -190,6 +207,8 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
                 
                 return $score > 0.5;
             } else {
+                write_log( 'verify failed, remoteip: ' . $remoteip . ', response_body: ' . $response_body);
+
                 return false;
             }
 		}
