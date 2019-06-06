@@ -20,7 +20,10 @@ if ( !function_exists('write_log') ) {
             $log_content = print_r( $log, true );
         }
 
-        $log_content = $log_content . "\n";
+        $date = new DateTime('now', new DateTimeZone('Asia/Shanghai'));
+        $date = $date->format("Y-m-d H:i:s ");
+
+        $log_content = $date . $log_content . "\n";
 
         $log_file = fopen(ABSPATH . '/ac_log.txt', 'a');
         if ($log_file) {
