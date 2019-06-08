@@ -163,10 +163,16 @@ if ( ! class_exists( 'AeroCaptcha' ) ) {
             }
 
             $remoteip = $_SERVER['REMOTE_ADDR'];
+            if ( ! $remoteip ) {
+                write_log( 'remoteip is empty, return verify success' );
+
+                return true;
+            }
+
             $token = isset( $_POST['g-recaptcha-response'] ) ? $_POST['g-recaptcha-response'] : '';
 
-            if ( ! $remoteip || ! $token ) {
-                write_log( 'remoteip or token is empty, return verify failed' );
+            if ( ! $token ) {
+                write_log( 'IP: ' . $remoteip . ', token is empty, return verify failed' );
 
                 return false;
             }
